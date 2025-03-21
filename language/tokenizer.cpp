@@ -181,3 +181,52 @@ std::vector<Token> Tokenizer::tokenize() {
   tokens.push_back(Token(TokenType::TKN_EOF, "", line, column));
   return tokens;
 }
+
+const std::string tokenTypeToString(TokenType type) {
+  switch (type) {
+  case TokenType::TKN_IDENTIFIER:
+    return "TKN_IDENTIFIER";
+  case TokenType::TKN_NUMBER_LITERAL:
+    return "TKN_NUMBER_LITERAL";
+  case TokenType::TKN_STRING_LITERAL:
+    return "TKN_STRING_LITERAL";
+  case TokenType::TKN_OPERATOR:
+    return "TKN_OPERATOR";
+  case TokenType::TKN_COMPARISON:
+    return "TKN_COMPARISON";
+  case TokenType::TKN_ASSIGNMENT:
+    return "TKN_ASSIGNMENT";
+  case TokenType::TKN_LOGICAL_AND:
+    return "TKN_LOGICAL_AND";
+  case TokenType::TKN_LOGICAL_OR:
+    return "TKN_LOGICAL_OR";
+  case TokenType::TKN_NOT:
+    return "TKN_NOT";
+  case TokenType::TKN_LPAREN:
+    return "TKN_LPAREN";
+  case TokenType::TKN_RPAREN:
+    return "TKN_RPAREN";
+  case TokenType::TKN_LBRACE:
+    return "TKN_LBRACE";
+  case TokenType::TKN_RBRACE:
+    return "TKN_RBRACE";
+  case TokenType::TKN_LBRACKET:
+    return "TKN_LBRACKET";
+  case TokenType::TKN_RBRACKET:
+    return "TKN_RBRACKET";
+  case TokenType::TKN_COLON:
+    return "TKN_COLON";
+  case TokenType::TKN_COMMA:
+    return "TKN_COMMA";
+  case TokenType::TKN_DOT:
+    return "TKN_DOT";
+  case TokenType::TKN_NEWLINE:
+    return "TKN_NEWLINE";
+  case TokenType::TKN_EOF:
+    return "TKN_EOF";
+  case TokenType::TKN_COMMENT:
+    return "TKN_COMMENT";
+  default:
+    return "TKN_NULL";
+  }
+}

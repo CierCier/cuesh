@@ -1,9 +1,11 @@
 #pragma once
 
+#include "language/tokenizer.hpp"
 #include <functional>
 #include <string>
 #include <termios.h>
 #include <unordered_map>
+#include <vector>
 
 class Shell {
 public:
@@ -15,12 +17,15 @@ public:
   int getError() { return error; }
 
 private:
+  Tokenizer tokenizer;
+
   int error; // internally used to pass error codes;
 
   std::string Buffer;
 
   void processInput();
-  int executeCommand(const std::string &command);
+  int executeCommand(const std::string &command,
+                     const std::vector<std::string> &args);
 
   // Environment
   std::unordered_map<std::string, std::string> Environment;
@@ -42,14 +47,15 @@ private:
   std::string cd(const std::string &path);
   std::string pwd();
   std::string echo(const std::string &message);
-  std::string exit(const std::string &code);
-  std::string set(const std::string &assignment); // set an environment variable
-  std::string unset(const std::string &key);   // unset an environment variable
+  void exit(const int &code);
+  void set(const std::string &key,
+           const std::string &value);          // set an environment variable
+  void unset(const std::string &key);          // unset an environment variable
   std::string history(const std::string &arg); // show command history
 
   // command map
-  std::unordered_map<std::string,
-                     std::function<std::string(const std::string &)>>
+  std::unordered_map<
+      std::string, std::function<std::string(const std::vector<std::string> &)>>
       CommandMap;
 
   // command history

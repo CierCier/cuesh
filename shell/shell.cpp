@@ -1,12 +1,15 @@
 #include "shell.hpp"
+#include "language/tokenizer.hpp"
 
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <vector>
 
 Shell::Shell() : error(0) {
   // Setup default environment variables
@@ -33,18 +36,52 @@ Shell::Shell() : error(0) {
   setEnv("PS1", "$USER@$PWD > ");
 
   // Setup built-in commands
-  CommandMap["cd"] = [this](const std::string &arg) { return cd(arg); };
-  CommandMap["pwd"] = [this](const std::string &arg) {
-    (void)arg;
+  CommandMap["cd"] = [this](const std::vector<std::string> &args) {
+    if (args.empty()) {
+      return cd(getEnv("HOME"));
+    }
+    return cd(args[0]);
+  };
+  CommandMap["pwd"] = [this](const std::vector<std::string> &args) {
+    (void)args;
     return pwd();
   };
 
-  CommandMap["echo"] = [this](const std::string &arg) { return echo(arg); };
-  CommandMap["exit"] = [this](const std::string &arg) { return exit(arg); };
-  CommandMap["set"] = [this](const std::string &arg) { return set(arg); };
-  CommandMap["unset"] = [this](const std::string &arg) { return unset(arg); };
-  CommandMap["history"] = [this](const std::string &arg) {
-    (void)arg;
+  CommandMap["echo"] = [this](const std::vector<std::string> &args) {
+    std::string arg = "";
+    for (const auto &a : args) {
+      arg += a + " ";
+    }
+
+    return echo(arg);
+  };
+
+  CommandMap["exit"] = [this](const std::vector<std::string> &args) {
+    if (args.empty()) {
+      exit(0);
+    } else {
+      exit(std::stoi(args[0]));
+    }
+    return "";
+  };
+
+  CommandMap["set"] = [this](const std::vector<std::string> &args) {
+    if (args.size() < 2) {
+      return "set: missing argument";
+    }
+    set(args[0], args[1]);
+    return "";
+  };
+  CommandMap["unset"] = [this](const std::vector<std::string> &args) {
+    if (args.empty()) {
+      return "unset: missing argument";
+    }
+    unset(args[0]);
+    return "";
+  };
+
+  CommandMap["history"] = [this](const std::vector<std::string> &args) {
+    (void)args;
     showCommandHistory();
     return "";
   };
@@ -149,64 +186,71 @@ void Shell::start() {
   termiosExitRawMode();
 }
 void Shell::processInput() {
-  std::string command = Buffer;
-  if (command.empty()) {
+
+  tokenizer.setInput(Buffer);
+  std::vector<Token> tokens = tokenizer.tokenize();
+
+#ifdef _DEBUG
+  for (const auto &t : tokens) {
+    std::cout << "Token: { " << tokenTypeToString(t.type) << ", " << t.value
+              << " }" << std::endl;
+  }
+#endif
+
+  if (tokens.empty()) {
     return;
   }
 
-  size_t spacePos = command.find(' ');
-  std::string cmd =
-      (spacePos == std::string::npos) ? command : command.substr(0, spacePos);
-  std::string arg =
-      (spacePos == std::string::npos) ? "" : command.substr(spacePos + 1);
+  Token cmd = tokens[0];
+  std::vector<std::string> args;
+  for (size_t i = 1; i < tokens.size(); i++) {
 
-  auto it = CommandMap.find(cmd);
-  if (it != CommandMap.end()) {
-    std::cout << it->second(arg) << std::endl;
-  } else {
-    executeCommand(command);
+    args.push_back(tokens[i].value);
   }
 
-  addToCommandHistory(command);
+  addToCommandHistory(Buffer);
+  Buffer.clear();
+
+  auto it = CommandMap.find(cmd.value);
+  if (it != CommandMap.end()) {
+    std::string output = it->second(args);
+    if (!output.empty()) {
+      std::cout << output << std::endl;
+    }
+  } else {
+    int status = executeCommand(cmd.value, args);
+    if (status != 0) {
+      std::cerr << "Command failed with status: " << status << std::endl;
+    }
+  }
 }
 
-int Shell::executeCommand(const std::string &command) {
+int Shell::executeCommand(const std::string &command,
+                          const std::vector<std::string> &args) {
   int pid = fork();
   if (pid == 0) {
     // Child process
     char **env = getEnviron();
-    size_t pos = command.find(' ');
 
-    // If there is a space, we need to split the command and arguments
-    if (pos != std::string::npos) {
-      std::string cmd = command.substr(0, pos);
-      std::string arg_string = command.substr(pos + 1);
+    char **argv = new char *[args.size() + 2];
+    argv[0] = new char[command.size() + 1];
+    std::strcpy(argv[0], command.c_str());
 
-      // split the args
-      std::vector<std::string> args;
-      size_t start = 0;
-      while (start < arg_string.size()) {
-        size_t end = arg_string.find(' ', start);
-        if (end == std::string::npos) {
-          end = arg_string.size();
-        }
-        args.push_back(arg_string.substr(start, end - start));
-        start = end + 1;
-      }
-
-      // convert to char**
-      char **args_array = new char *[args.size() + 2];
-      args_array[0] = strdup(cmd.c_str());
-      for (size_t i = 0; i < args.size(); i++) {
-        args_array[i + 1] = strdup(args[i].c_str());
-      }
-      args_array[args.size() + 1] = nullptr;
-
-      execvpe(cmd.c_str(), args_array, env);
-    } else {
-      char *args[] = {strdup(command.c_str()), nullptr};
-      execvpe(command.c_str(), args, env);
+    for (size_t i = 0; i < args.size(); i++) {
+      argv[i + 1] = new char[args[i].size() + 1];
+      std::strcpy(argv[i + 1], args[i].c_str());
     }
+    argv[args.size() + 1] = nullptr;
+
+// debug print
+#ifdef _DEBUG
+    std::cout << "Executing command: " << command << std::endl;
+    for (size_t i = 0; argv[i] != nullptr; i++) {
+      std::cout << "argv[" << i << "]: " << argv[i] << std::endl;
+    }
+#endif
+
+    execvpe(command.c_str(), argv, env);
 
     // If execve returns, it failed
     std::cerr << "Failed to execute command: " << command << std::endl;
@@ -247,36 +291,16 @@ std::string Shell::echo(const std::string &message) {
   return output;
 }
 
-std::string Shell::exit(const std::string &code) {
-  int exitCode = 0;
-  if (!code.empty()) {
-    try {
-      exitCode = std::stoi(code);
-    } catch (const std::exception &e) {
-      std::cerr << "exit: " << e.what() << std::endl;
-    }
-  }
-
-  ::exit(exitCode);
+void Shell::exit(const int &code) {
+  termiosExitRawMode();
+  ::exit(code);
 }
 
-std::string Shell::set(const std::string &assignment) {
-  size_t pos = assignment.find(' ');
-  if (pos != std::string::npos) {
-    std::string key = assignment.substr(0, pos);
-    std::string value = assignment.substr(pos + 1);
-    value = replaceEnvVars(value);
-    // figure out if we have a math expression
-
-    setEnv(key, value);
-  }
-  return "";
+void Shell::set(const std::string &key, const std::string &value) {
+  Environment[key] = value;
 }
 
-std::string Shell::unset(const std::string &key) {
-  Environment.erase(key);
-  return "";
-}
+void Shell::unset(const std::string &key) { Environment.erase(key); }
 
 void Shell::addToCommandHistory(const std::string &command) {
   CommandHistory.push_back(command);

@@ -7,7 +7,7 @@ SOURCES = $(shell find  -name '*.cpp')
 OBJECTS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 INCLUDES = -I.
-CFLAGS =  -g $(INCLUDES)
+CFLAGS =  -g $(INCLUDES) -D_DEBUG
 CXXFLAGS = $(CFLAGS) -std=c++23 -stdlib=libc++
 
 CXX = clang++

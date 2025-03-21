@@ -38,6 +38,9 @@ enum class TokenError {
   UNKNOWN_ERROR    // Catch-all for unknown errors
 };
 
+const std::string tokenTypeToString(TokenType type);
+
+
 class Token {
 public:
   TokenType type;
